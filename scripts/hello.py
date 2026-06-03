@@ -3,7 +3,9 @@ from openai import OpenAI
 from google import genai
 
 # OpenAI: messages list, answer at resp.choices[0].message.content
-oai = OpenAI(api_key=settings.openai_api_key)  # reads OPENAI_API_KEY from the environment
+oai = OpenAI(
+    api_key=settings.openai_api_key
+)  # reads OPENAI_API_KEY from the environment
 r1 = oai.chat.completions.create(
     model=settings.openai_model,
     messages=[{"role": "user", "content": "In one sentence, what is an AI Engineer?"}],

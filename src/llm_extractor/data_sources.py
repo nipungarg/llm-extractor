@@ -13,14 +13,16 @@ def fetch_wikipedia(title: str) -> str:
     """
     params = {
         "action": "query",
-        "prop": "extracts",      # we want the article body
-        "explaintext": 1,        # give us plain text, not HTML
-        "redirects": 1,          # follow redirects, e.g. "KYC" -> "Know your customer"
+        "prop": "extracts",  # we want the article body
+        "explaintext": 1,  # give us plain text, not HTML
+        "redirects": 1,  # follow redirects, e.g. "KYC" -> "Know your customer"
         "format": "json",
-        "formatversion": 2,      # cleaner response: pages is a simple list
+        "formatversion": 2,  # cleaner response: pages is a simple list
         "titles": title,
     }
-    headers = {"User-Agent": "ai-bootcamp/1.0 (learning project)"}  # Wikipedia asks for a UA
+    headers = {
+        "User-Agent": "ai-bootcamp/1.0 (learning project)"
+    }  # Wikipedia asks for a UA
     resp = httpx.get(WIKI_API, params=params, headers=headers, timeout=30)
     resp.raise_for_status()
     pages = resp.json()["query"]["pages"]

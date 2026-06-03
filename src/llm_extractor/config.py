@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     openai_api_key: str = ""
     gemini_api_key: str = ""
-    default_provider: str = "openai"          # switch the whole app's provider here
+    default_provider: str = "openai"  # switch the whole app's provider here
     openai_model: str = "gpt-4o-mini"
     gemini_model: str = "gemini-2.5-flash"
 
@@ -19,4 +19,4 @@ class Settings(BaseSettings):
     app_api_key: str = ""
 
 
-settings = Settings()     
+settings = Settings()
