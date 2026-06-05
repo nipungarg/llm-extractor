@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Any, Literal, Generic, TypeVar
 
 from pydantic import BaseModel, Field, computed_field
 
 Role = Literal["system", "user", "assistant"]
+T = TypeVar("T", bound=BaseModel)
 
 
 class LLMMessage(BaseModel):
@@ -36,3 +37,11 @@ class LLMResponse(BaseModel):
     raw: dict[str, Any] | None = Field(
         default=None, repr=False
     )  # full payload for debugging
+
+class ParsedResponse(BaseModel, Generic[T]):
+    data: T  # the validated, structured object
+    provider: str
+    model: str
+    usage: TokenUsage
+    cost_usd: float = 0.0
+    latency_ms: float = 0.0

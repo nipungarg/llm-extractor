@@ -46,3 +46,37 @@ class OpenAIProvider(LLMProvider):
             finish_reason=resp.choices[0].finish_reason,
             raw=resp.model_dump(),
         )
+
+    def parse(
+        self, messages, response_model, *, model=None, temperature=0.0, max_tokens=1024
+    ):
+        import time
+        from ..models import ParsedResponse, TokenUsage
+        from ..pricing import compute_cost
+
+        model = model or self.default_model
+        start = time.perf_counter()
+        # .parse() forces the model's output to match the Pydantic schema (was .beta. in old SDKs)
+        completion = self._client.chat.completions.parse(
+            model=model,
+            messages=[m.model_dump() for m in messages],
+            temperature=temperature,
+            max_completion_tokens=max_tokens,
+            response_format=response_model,
+        )
+        latency_ms = (time.perf_counter() - start) * 1000
+        msg = completion.choices[0].message
+        if msg.refusal:  # the model can refuse — handle it
+            raise ValueError(f"Model refused: {msg.refusal}")
+        usage = TokenUsage(
+            input_tokens=completion.usage.prompt_tokens,
+            output_tokens=completion.usage.completion_tokens,
+        )
+        return ParsedResponse(
+            data=msg.parsed,
+            provider=self.provider_name,
+            model=model,
+            usage=usage,
+            cost_usd=compute_cost(model, usage),
+            latency_ms=latency_ms,
+        )
