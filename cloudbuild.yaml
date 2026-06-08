@@ -1,0 +1,49 @@
+# Builds the image with BuildKit enabled (so the Dockerfile's
+# `RUN --mount=type=cache` lines work), then deploys it to Cloud Run.
+#
+# Deploy with:
+#   gcloud builds submit --config cloudbuild.yaml --region us-central1
+steps:
+  # 1. Build. DOCKER_BUILDKIT=1 is what makes --mount=type=cache valid.
+  - name: gcr.io/cloud-builders/docker
+    env:
+      - DOCKER_BUILDKIT=1
+    args:
+      - build
+      - -t
+      - ${_IMAGE}
+      - .
+
+  # 2. Push the built image to Artifact Registry.
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_IMAGE}
+
+  # 3. Deploy that image to Cloud Run (same env vars + secrets as before).
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - llm-extractor
+      - --image=${_IMAGE}
+      - --region=us-central1
+      - --no-allow-unauthenticated
+      - --set-env-vars=DEFAULT_PROVIDER=openai,OPENAI_MODEL=gpt-4o-mini,GEMINI_MODEL=gemini-2.5-flash,LANGFUSE_HOST=https://us.cloud.langfuse.com
+      - --set-secrets=OPENAI_API_KEY=openai-api-key:latest,GEMINI_API_KEY=gemini-api-key:latest,LANGFUSE_PUBLIC_KEY=langfuse-public-key:latest,LANGFUSE_SECRET_KEY=langfuse-secret-key:latest,APP_API_KEY=app-api-key:latest
+
+  # The service is private; grant invokers once with `gcloud run services
+  # add-iam-policy-binding ... --role=roles/run.invoker` (bindings persist across deploys).
+
+images:
+  - ${_IMAGE}
+
+substitutions:
+  # Reuses the Artifact Registry repo that the earlier `--source` deploy created.
+  _IMAGE: us-central1-docker.pkg.dev/${PROJECT_ID}/cloud-run-source-deploy/llm-extractor:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  # Lets _IMAGE's value expand the built-in ${PROJECT_ID} variable.
+  dynamic_substitutions: true

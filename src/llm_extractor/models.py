@@ -38,6 +38,7 @@ class LLMResponse(BaseModel):
         default=None, repr=False
     )  # full payload for debugging
 
+
 class ParsedResponse(BaseModel, Generic[T]):
     data: T  # the validated, structured object
     provider: str
