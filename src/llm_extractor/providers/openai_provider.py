@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import time
 
+import base64
+
 from openai import APIError, APITimeoutError, OpenAI, RateLimitError
 
 from ..models import LLMResponse, TokenUsage
@@ -15,6 +17,28 @@ from ..errors import (
     ProviderTimeout,
     retry_transient,
 )
+
+def _guess_mime(data: bytes) -> str:
+    # detect format from the file's magic bytes (we only need jpeg vs png)
+    return "image/jpeg" if data[:3] == b"\xff\xd8\xff" else "image/png"
+
+
+def _openai_messages(messages, images):
+    """Turn our messages into OpenAI's format, attaching images to the first user turn."""
+    out, attached = [], False
+    for m in messages:
+        if m.role == "user" and images and not attached:
+            # multimodal user turn = a list of text + image parts
+            content = [{"type": "text", "text": m.content}]
+            for img in images:
+                b64 = base64.b64encode(img).decode()
+                content.append({"type": "image_url",
+                                "image_url": {"url": f"data:{_guess_mime(img)};base64,{b64}"}})
+            out.append({"role": "user", "content": content})
+            attached = True
+        else:
+            out.append(m.model_dump())
+    return out
 
 
 class OpenAIProvider(LLMProvider):
@@ -32,14 +56,14 @@ class OpenAIProvider(LLMProvider):
 
     @retry_transient  # retry only on timeouts / rate limits
     def complete(
-        self, messages, *, model=None, temperature=0.7, max_tokens=1024
+        self, messages, *, model=None, temperature=0.7, max_tokens=1024, images=None
     ) -> LLMResponse:
         model = model or self.default_model
         start = time.perf_counter()
         try:
             resp = self._client.chat.completions.create(
                 model=model,
-                messages=[m.model_dump() for m in messages],
+                messages=_openai_messages(messages, images),
                 temperature=temperature,
                 max_completion_tokens=max_tokens,
             )
@@ -68,7 +92,7 @@ class OpenAIProvider(LLMProvider):
 
     @retry_transient
     def parse(
-        self, messages, response_model, *, model=None, temperature=0.0, max_tokens=1024
+        self, messages, response_model, *, model=None, temperature=0.0, max_tokens=1024, images=None
     ):
         import time
         from ..models import ParsedResponse, TokenUsage
@@ -80,7 +104,7 @@ class OpenAIProvider(LLMProvider):
         try:
             completion = self._client.chat.completions.parse(
                 model=model,
-                messages=[m.model_dump() for m in messages],
+                messages=_openai_messages(messages, images),
                 temperature=temperature,
                 max_completion_tokens=max_tokens,
                 response_format=response_model,

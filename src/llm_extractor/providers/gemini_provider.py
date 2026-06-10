@@ -13,6 +13,21 @@ from .base import LLMProvider
 from ..errors import ProviderError, ProviderRateLimit, ProviderTimeout, retry_transient
 
 
+def _gemini_contents(messages, images):
+    """Build Gemini contents, attaching image Parts to the first user turn."""
+    contents, attached = [], False
+    for m in messages:
+        if m.role == "system":
+            continue                                  # system goes in system_instruction, not contents
+        parts = [types.Part(text=m.content)]
+        if m.role == "user" and images and not attached:
+            for img in images:
+                mime = "image/jpeg" if img[:3] == b"\xff\xd8\xff" else "image/png"
+                parts.append(types.Part.from_bytes(data=img, mime_type=mime))
+            attached = True
+        contents.append(types.Content(role="model" if m.role == "assistant" else "user", parts=parts))
+    return contents
+
 class GeminiProvider(LLMProvider):
     provider_name = "gemini"
 
@@ -31,19 +46,12 @@ class GeminiProvider(LLMProvider):
 
     @retry_transient
     def complete(
-        self, messages, *, model=None, temperature=0.7, max_tokens=1024
+        self, messages, *, model=None, temperature=0.7, max_tokens=1024, images=None
     ) -> LLMResponse:
         model = model or self.default_model
         # Gemini differences our seam hides: system prompt is separate; 'assistant' -> 'model'.
         system = "\n".join(m.content for m in messages if m.role == "system") or None
-        contents = [
-            types.Content(
-                role="model" if m.role == "assistant" else "user",
-                parts=[types.Part(text=m.content)],
-            )
-            for m in messages
-            if m.role != "system"
-        ]
+        contents = _gemini_contents(messages, images)
         config = types.GenerateContentConfig(
             temperature=temperature,
             max_output_tokens=max_tokens,
@@ -85,7 +93,7 @@ class GeminiProvider(LLMProvider):
 
     @retry_transient
     def parse(
-        self, messages, response_model, *, model=None, temperature=0.0, max_tokens=1024
+        self, messages, response_model, *, model=None, temperature=0.0, max_tokens=1024, images=None
     ):
         import time
         from ..models import ParsedResponse, TokenUsage
@@ -93,14 +101,7 @@ class GeminiProvider(LLMProvider):
 
         model = model or self.default_model
         system = "\n".join(m.content for m in messages if m.role == "system") or None
-        contents = [
-            types.Content(
-                role="model" if m.role == "assistant" else "user",
-                parts=[types.Part(text=m.content)],
-            )
-            for m in messages
-            if m.role != "system"
-        ]
+        contents = _gemini_contents(messages, images)
         config = types.GenerateContentConfig(
             temperature=temperature,
             max_output_tokens=max_tokens,

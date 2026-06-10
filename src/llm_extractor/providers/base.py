@@ -20,6 +20,7 @@ class LLMProvider(ABC):
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 1024,
+        images: list[bytes] | None = None,
     ) -> LLMResponse: ...
 
     @abstractmethod
@@ -31,4 +32,5 @@ class LLMProvider(ABC):
         model: str | None = None,
         temperature: float = 0.0,
         max_tokens: int = 1024,
+        images: list[bytes] | None = None,
     ): ...
