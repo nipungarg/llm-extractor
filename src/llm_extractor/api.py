@@ -2,12 +2,19 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, File, UploadFile
 from langfuse import Langfuse, observe
 from pydantic import BaseModel
 
 from .config import settings
 from .extraction import ExtractionResult, extract
+
+import json
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+from .document import DocumentExtraction, extract_document
 
 langfuse = Langfuse(  # initializes + registers the client
     public_key=settings.langfuse_public_key,
@@ -81,3 +88,49 @@ def extract_endpoint(req: ExtractRequest) -> ExtractResponse:
     if not req.text.strip():
         raise HTTPException(status_code=422, detail="text must not be empty")
     return _run(req.text, req.provider)
+
+
+MAX_BYTES = 5 * 1024 * 1024                # 5 MB upload cap
+AUDIT_LOG = Path("audit.jsonl")            # simple line-per-request log (real DB comes in Week 3)
+
+@app.middleware("http")
+async def add_timing(request, call_next):
+    # measure how long every request takes and expose it in a response header
+    start = time.perf_counter()
+    response = await call_next(request)
+    response.headers["X-Process-Time-ms"] = f"{(time.perf_counter() - start) * 1000:.0f}"
+    return response
+
+
+def _audit(event: dict) -> None:
+    # append one JSON object per line — easy to inspect, no database needed yet
+    event["ts"] = datetime.now(timezone.utc).isoformat()
+    with AUDIT_LOG.open("a") as f:
+        f.write(json.dumps(event) + "\n")
+
+
+class DocumentResponse(BaseModel):
+    result: DocumentExtraction
+    provider: str
+    cost_usd: float
+    latency_ms: float
+
+
+@app.post("/extract-document", response_model=DocumentResponse,
+          dependencies=[Depends(require_api_key)])
+async def extract_document_endpoint(file: UploadFile = File(...)) -> DocumentResponse:
+    # 1) validate the upload
+    if not (file.content_type or "").startswith("image/"):
+        raise HTTPException(status_code=415, detail="Upload an image file")
+    image_bytes = await file.read()
+    if len(image_bytes) > MAX_BYTES:
+        raise HTTPException(status_code=413, detail="File too large (max 5 MB)")
+
+    # 2) extract (with automatic fallback if you wire get_fallback_provider here)
+    parsed = extract_document(image_bytes)
+
+    # 3) audit + respond
+    _audit({"endpoint": "extract-document", "filename": file.filename,
+            "provider": parsed.provider, "cost_usd": parsed.cost_usd})
+    return DocumentResponse(result=parsed.data, provider=parsed.provider,
+                            cost_usd=parsed.cost_usd, latency_ms=parsed.latency_ms)

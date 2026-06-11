@@ -1,0 +1,2 @@
+{"endpoint": "extract-document", "filename": "receipt.png", "provider": "openai", "cost_usd": 0.0021874499999999996, "ts": "2026-06-11T11:52:48.861089+00:00"}
+{"endpoint": "extract-document", "filename": "screenshot_test.png", "provider": "openai", "cost_usd": 0.00389955, "ts": "2026-06-11T12:13:07.473894+00:00"}

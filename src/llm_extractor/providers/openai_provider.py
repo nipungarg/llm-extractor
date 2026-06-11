@@ -18,6 +18,7 @@ from ..errors import (
     retry_transient,
 )
 
+
 def _guess_mime(data: bytes) -> str:
     # detect format from the file's magic bytes (we only need jpeg vs png)
     return "image/jpeg" if data[:3] == b"\xff\xd8\xff" else "image/png"
@@ -32,8 +33,12 @@ def _openai_messages(messages, images):
             content = [{"type": "text", "text": m.content}]
             for img in images:
                 b64 = base64.b64encode(img).decode()
-                content.append({"type": "image_url",
-                                "image_url": {"url": f"data:{_guess_mime(img)};base64,{b64}"}})
+                content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{_guess_mime(img)};base64,{b64}"},
+                    }
+                )
             out.append({"role": "user", "content": content})
             attached = True
         else:
@@ -92,7 +97,14 @@ class OpenAIProvider(LLMProvider):
 
     @retry_transient
     def parse(
-        self, messages, response_model, *, model=None, temperature=0.0, max_tokens=1024, images=None
+        self,
+        messages,
+        response_model,
+        *,
+        model=None,
+        temperature=0.0,
+        max_tokens=1024,
+        images=None,
     ):
         import time
         from ..models import ParsedResponse, TokenUsage

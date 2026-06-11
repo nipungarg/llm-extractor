@@ -28,6 +28,7 @@ def fetch_wikipedia(title: str) -> str:
     pages = resp.json()["query"]["pages"]
     return pages[0].get("extract", "") if pages else ""
 
+
 def load_cord_receipts(n: int = 5, split: str = "test"):
     """Stream real receipt images + ground-truth labels from the public CORD-v2 dataset.
 
@@ -46,6 +47,6 @@ def load_cord_receipts(n: int = 5, split: str = "test"):
         if i >= n:
             break
         buf = io.BytesIO()
-        example["image"].save(buf, format="PNG")              # PIL image -> PNG bytes
+        example["image"].save(buf, format="PNG")  # PIL image -> PNG bytes
         ground_truth = json.loads(example["ground_truth"]).get("gt_parse", {})
         yield buf.getvalue(), ground_truth
