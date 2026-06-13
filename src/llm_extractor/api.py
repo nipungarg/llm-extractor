@@ -90,15 +90,18 @@ def extract_endpoint(req: ExtractRequest) -> ExtractResponse:
     return _run(req.text, req.provider)
 
 
-MAX_BYTES = 5 * 1024 * 1024                # 5 MB upload cap
-AUDIT_LOG = Path("audit.jsonl")            # simple line-per-request log (real DB comes in Week 3)
+MAX_BYTES = 5 * 1024 * 1024  # 5 MB upload cap
+AUDIT_LOG = Path("audit.jsonl")  # simple line-per-request log (real DB comes in Week 3)
+
 
 @app.middleware("http")
 async def add_timing(request, call_next):
     # measure how long every request takes and expose it in a response header
     start = time.perf_counter()
     response = await call_next(request)
-    response.headers["X-Process-Time-ms"] = f"{(time.perf_counter() - start) * 1000:.0f}"
+    response.headers["X-Process-Time-ms"] = (
+        f"{(time.perf_counter() - start) * 1000:.0f}"
+    )
     return response
 
 
@@ -116,8 +119,11 @@ class DocumentResponse(BaseModel):
     latency_ms: float
 
 
-@app.post("/extract-document", response_model=DocumentResponse,
-          dependencies=[Depends(require_api_key)])
+@app.post(
+    "/extract-document",
+    response_model=DocumentResponse,
+    dependencies=[Depends(require_api_key)],
+)
 async def extract_document_endpoint(file: UploadFile = File(...)) -> DocumentResponse:
     # 1) validate the upload
     if not (file.content_type or "").startswith("image/"):
@@ -130,7 +136,17 @@ async def extract_document_endpoint(file: UploadFile = File(...)) -> DocumentRes
     parsed = extract_document(image_bytes)
 
     # 3) audit + respond
-    _audit({"endpoint": "extract-document", "filename": file.filename,
-            "provider": parsed.provider, "cost_usd": parsed.cost_usd})
-    return DocumentResponse(result=parsed.data, provider=parsed.provider,
-                            cost_usd=parsed.cost_usd, latency_ms=parsed.latency_ms)
+    _audit(
+        {
+            "endpoint": "extract-document",
+            "filename": file.filename,
+            "provider": parsed.provider,
+            "cost_usd": parsed.cost_usd,
+        }
+    )
+    return DocumentResponse(
+        result=parsed.data,
+        provider=parsed.provider,
+        cost_usd=parsed.cost_usd,
+        latency_ms=parsed.latency_ms,
+    )
